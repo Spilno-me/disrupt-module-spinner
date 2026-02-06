@@ -4,7 +4,8 @@
  * Parses AI responses to extract generated artifacts.
  */
 
-import type { GeneratedArtifact, ArtifactType } from '@/types/module';
+import type { GeneratedArtifact, ArtifactType, BusinessProcess, ProcessNode } from '@/types/module';
+import { applyLayout } from './workflow-layout';
 
 /**
  * Extract artifacts from message content
@@ -25,9 +26,16 @@ export function extractArtifacts(content: string): GeneratedArtifact[] {
       if (parsed.type && parsed.data) {
         const artifactType = parsed.type as ArtifactType;
         if (['dictionary', 'form', 'process'].includes(artifactType)) {
+          let artifactData = parsed.data;
+
+          // For process artifacts, ensure nodes have positions
+          if (artifactType === 'process') {
+            artifactData = ensureWorkflowPositions(artifactData as BusinessProcess);
+          }
+
           artifacts.push({
             type: artifactType,
-            data: parsed.data,
+            data: artifactData,
             reasoning: parsed.reasoning,
           });
         }
@@ -87,4 +95,40 @@ export function getArtifactColor(type: ArtifactType): string {
     default:
       return 'text-zinc-400 bg-zinc-500/10 border-zinc-500/20';
   }
+}
+
+/**
+ * Ensure workflow nodes have valid positions
+ * If any node is missing position, apply automatic layout
+ */
+function ensureWorkflowPositions(process: BusinessProcess): BusinessProcess {
+  if (!process.nodes || process.nodes.length === 0) {
+    return process;
+  }
+
+  // Check if all nodes have valid positions
+  const needsLayout = process.nodes.some(
+    (node: ProcessNode) =>
+      !node.position ||
+      typeof node.position.x !== 'number' ||
+      typeof node.position.y !== 'number'
+  );
+
+  if (!needsLayout) {
+    return process;
+  }
+
+  // Clone the process to avoid mutating original
+  const clonedProcess: BusinessProcess = {
+    ...process,
+    nodes: process.nodes.map((node: ProcessNode) => ({
+      ...node,
+      position: node.position ? { ...node.position } : { x: 0, y: 0 },
+    })),
+  };
+
+  // Apply layout algorithm
+  applyLayout(clonedProcess.nodes, clonedProcess.transitions);
+
+  return clonedProcess;
 }

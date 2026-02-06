@@ -5,6 +5,8 @@
  * from natural language descriptions.
  */
 
+import type { Module } from '@/types/module';
+
 export const SYSTEM_PROMPT = `You are a Module Builder assistant for HSE (Health, Safety, Environment) systems.
 
 Your role is to help users create module artifacts through conversation:
@@ -78,7 +80,7 @@ Always respond with:
 }
 \`\`\`
 
-### Business Process
+### Business Process (IMPORTANT: Include positions!)
 \`\`\`json
 {
   "type": "process",
@@ -89,35 +91,49 @@ Always respond with:
     "description": "Optional description",
     "nodes": [
       {
-        "id": "uuid",
-        "type": "start|end|task|gateway|subprocess",
-        "name": "Node Name",
-        "description": "What happens at this step",
-        "assignee": "role or user",
-        "formRef": "form_code (for tasks)",
-        "position": { "x": 100, "y": 100 }
+        "id": "node_001",
+        "type": "start",
+        "name": "Start",
+        "position": { "x": 400, "y": 50 }
+      },
+      {
+        "id": "node_002",
+        "type": "task",
+        "name": "Task Name",
+        "formRef": "form_code",
+        "position": { "x": 400, "y": 150 }
+      },
+      {
+        "id": "node_003",
+        "type": "end",
+        "name": "End",
+        "position": { "x": 400, "y": 250 }
       }
     ],
     "transitions": [
       {
-        "id": "uuid",
-        "from": "node_id",
-        "to": "node_id",
-        "condition": "optional condition",
-        "label": "transition label"
+        "id": "trans_001",
+        "from": "node_001",
+        "to": "node_002",
+        "label": "Begin"
       }
     ]
   }
 }
 \`\`\`
 
+**CRITICAL for workflows**: Always include "position": { "x": number, "y": number } for each node.
+Layout nodes top-to-bottom, with y increasing by ~100 per level. Center nodes at x=400.
+For branching, offset x by ±150 for parallel paths.
+
 ## Guidelines
 
-1. **Generate realistic UUIDs** - Use format like "dict_001", "field_001", "node_001" for readability
-2. **Infer intelligently** - If user says "statuses", generate common HSE statuses like Draft, Pending Review, Approved, Rejected
+1. **Generate readable IDs** - Use format like "dict_001", "field_001", "node_001"
+2. **Infer intelligently** - If user says "statuses", generate common HSE statuses
 3. **Be HSE-aware** - You understand health, safety, and environmental compliance workflows
-4. **Suggest connections** - When creating forms, suggest relevant dictionaries. When creating processes, suggest which forms go with which tasks.
-5. **Ask clarifying questions** - If the request is ambiguous, ask before generating
+4. **Reference existing artifacts** - When creating forms, reference dictionaries that exist in the vault using their code in dictionaryRef
+5. **Suggest connections** - Mention which vault artifacts you're referencing
+6. **Ask clarifying questions** - If the request is ambiguous, ask before generating
 
 ## Example Interactions
 
@@ -125,12 +141,64 @@ User: "I need incident severity levels"
 → Generate a dictionary with severity levels (Minor, Moderate, Serious, Critical, Catastrophic)
 
 User: "Create a form for reporting incidents"
-→ Generate an incident report form with fields like: title, description, date, location, severity (linked to dictionary), injured parties, immediate actions
+→ Generate an incident report form, reference severity dictionary if it exists in vault
 
 User: "Workflow for incident handling"
-→ Generate a process: Report → Review → Investigate → Corrective Action → Close
+→ Generate a process with positioned nodes: Report → Review → Investigate → Corrective Action → Close
 
 Remember: You're building real HSE compliance systems. Be thorough but practical.`;
+
+/**
+ * Generate vault context to append to system prompt
+ */
+export function generateVaultContext(module: Module | null): string {
+  if (!module) {
+    return '\n\n## Current Vault\nNo module selected. Artifacts will not reference existing items.';
+  }
+
+  const sections: string[] = [
+    `\n\n## Current Module: ${module.name}`,
+    '\nThe user has these artifacts in their vault. Reference them when appropriate:\n',
+  ];
+
+  // Dictionaries
+  if (module.dictionaries.length > 0) {
+    sections.push('### Dictionaries Available:');
+    module.dictionaries.forEach(dict => {
+      const items = dict.items.map(i => i.label).slice(0, 5).join(', ');
+      const more = dict.items.length > 5 ? ` (+${dict.items.length - 5} more)` : '';
+      sections.push(`- **${dict.category.name}** (code: \`${dict.category.code}\`): ${items}${more}`);
+    });
+    sections.push('');
+  }
+
+  // Forms
+  if (module.forms.length > 0) {
+    sections.push('### Forms Available:');
+    module.forms.forEach(form => {
+      sections.push(`- **${form.name}** (code: \`${form.code}\`): ${form.fields.length} fields`);
+    });
+    sections.push('');
+  }
+
+  // Workflows
+  if (module.processes.length > 0) {
+    sections.push('### Workflows Available:');
+    module.processes.forEach(proc => {
+      sections.push(`- **${proc.name}** (code: \`${proc.code}\`): ${proc.nodes.length} states`);
+    });
+    sections.push('');
+  }
+
+  if (module.dictionaries.length === 0 && module.forms.length === 0 && module.processes.length === 0) {
+    sections.push('_Vault is empty. Generated artifacts will be the first ones._');
+  }
+
+  sections.push('\nWhen creating forms, use `dictionaryRef` to link select fields to existing dictionaries by their code.');
+  sections.push('When creating workflows, use `formRef` to link task nodes to existing forms by their code.');
+
+  return sections.join('\n');
+}
 
 export const ARTIFACT_EXTRACTION_PROMPT = `Extract any JSON artifacts from the assistant's response.
 Look for code blocks containing artifact definitions with "type": "dictionary", "type": "form", or "type": "process".

@@ -18,11 +18,14 @@ const gateway = createOpenAI({
 });
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages, vaultContext } = await req.json();
+
+  // Append vault context to system prompt so AI knows what artifacts exist
+  const systemPrompt = SYSTEM_PROMPT + (vaultContext || '');
 
   const result = streamText({
     model: gateway('anthropic/claude-sonnet-4-20250514'),
-    system: SYSTEM_PROMPT,
+    system: systemPrompt,
     messages,
   });
 

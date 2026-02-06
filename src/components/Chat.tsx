@@ -11,6 +11,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 import { ArtifactPreview } from './ArtifactPreview';
 import { extractArtifacts } from '@/lib/artifacts';
+import { useVault } from '@/lib/vault-context';
+import { generateVaultContext } from '@/lib/prompts';
 
 interface Message {
   id: string;
@@ -24,6 +26,8 @@ export function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const { currentModule } = useVault();
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -50,6 +54,9 @@ export function Chat() {
     setIsLoading(true);
 
     try {
+      // Generate vault context to send with request
+      const vaultContext = generateVaultContext(currentModule);
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,6 +65,7 @@ export function Chat() {
             role: m.role,
             content: m.content,
           })),
+          vaultContext,
         }),
       });
 
@@ -103,7 +111,7 @@ export function Chat() {
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, messages]);
+  }, [inputValue, isLoading, messages, currentModule]);
 
   // Handle Enter to submit (Shift+Enter for newline)
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -139,7 +147,10 @@ export function Chat() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Describe what you need... (e.g., 'Create incident severity levels')"
+              placeholder={currentModule
+                ? `Building ${currentModule.name}... describe what you need`
+                : "Describe what you need... (e.g., 'Create incident severity levels')"
+              }
               rows={1}
               className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 pr-12 text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               style={{ minHeight: '48px', maxHeight: '200px' }}
