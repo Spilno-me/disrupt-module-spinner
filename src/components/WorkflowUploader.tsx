@@ -25,7 +25,7 @@ export function WorkflowUploader() {
 
     try {
       const content = await file.text();
-      const parsed = await parseXamlWorkflow(content);
+      const parsed = parseXamlWorkflow(content);
       setWorkflow(parsed);
       setFileName(file.name);
     } catch (err) {

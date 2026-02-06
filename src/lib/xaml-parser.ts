@@ -3,11 +3,10 @@
  *
  * Parses Windows Workflow Foundation (WF) XAML state machine files
  * into our BusinessProcess format for visualization.
- *
- * Uses dagre for directed graph layout (client-side only).
  */
 
 import type { BusinessProcess, ProcessNode, ProcessTransition, ProcessNodeType } from '@/types/module';
+import { applyLayout } from './workflow-layout';
 
 interface ParsedState {
   id: string;
@@ -24,7 +23,7 @@ interface ParsedTransition {
 /**
  * Parse XAML state machine to BusinessProcess format
  */
-export async function parseXamlWorkflow(xmlContent: string): Promise<BusinessProcess> {
+export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlContent, 'text/xml');
 
@@ -102,8 +101,8 @@ export async function parseXamlWorkflow(xmlContent: string): Promise<BusinessPro
     }
   });
 
-  // Apply dagre layout (dynamic import for client-side only)
-  await applyDagreLayout(nodes, transitions);
+  // Apply layout
+  applyLayout(nodes, transitions);
 
   return {
     id: generateId(),
@@ -192,54 +191,6 @@ function cleanTransitionLabel(displayName: string): string {
   }
 
   return label || '';
-}
-
-/**
- * Apply dagre layout for proper directed graph positioning
- */
-async function applyDagreLayout(nodes: ProcessNode[], transitions: ProcessTransition[]) {
-  if (nodes.length === 0) return;
-
-  // Dynamic import to avoid SSR issues
-  const Dagre = (await import('@dagrejs/dagre')).default;
-
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-
-  // Configure layout: top-to-bottom, with good spacing
-  g.setGraph({
-    rankdir: 'TB',      // Top to bottom
-    nodesep: 80,        // Horizontal spacing between nodes
-    ranksep: 100,       // Vertical spacing between ranks
-    marginx: 50,
-    marginy: 50,
-  });
-
-  // Add nodes
-  nodes.forEach(node => {
-    g.setNode(node.id, {
-      width: 150,
-      height: 50,
-    });
-  });
-
-  // Add edges
-  transitions.forEach(t => {
-    g.setEdge(t.from, t.to);
-  });
-
-  // Run layout
-  Dagre.layout(g);
-
-  // Apply positions to nodes
-  nodes.forEach(node => {
-    const nodeWithPosition = g.node(node.id);
-    if (nodeWithPosition) {
-      node.position = {
-        x: nodeWithPosition.x - 75,  // Center the node (width/2)
-        y: nodeWithPosition.y - 25,  // Center the node (height/2)
-      };
-    }
-  });
 }
 
 function generateId(): string {

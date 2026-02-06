@@ -105,7 +105,7 @@ export async function normalizeWorkflow(content: string, formatHint?: WorkflowFo
 
     // Validate and apply layout
     validateWorkflow(workflow, warnings);
-    await applyLayout(workflow);
+    applyWorkflowLayout(workflow);
 
     return {
       success: true,
@@ -346,42 +346,18 @@ function validateWorkflow(workflow: BusinessProcess, warnings: string[]): void {
 }
 
 /**
- * Apply dagre layout to workflow
+ * Apply layout to workflow using custom algorithm
  */
-async function applyLayout(workflow: BusinessProcess): Promise<void> {
+function applyWorkflowLayout(workflow: BusinessProcess): void {
   if (workflow.nodes.length === 0) return;
 
   // Check if positions already set
   const hasPositions = workflow.nodes.some(n => n.position.x !== 0 || n.position.y !== 0);
   if (hasPositions) return;
 
-  const Dagre = (await import('@dagrejs/dagre')).default;
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-
-  g.setGraph({
-    rankdir: 'TB',
-    nodesep: 80,
-    ranksep: 100,
-    marginx: 50,
-    marginy: 50,
-  });
-
-  workflow.nodes.forEach(node => {
-    g.setNode(node.id, { width: 150, height: 50 });
-  });
-
-  workflow.transitions.forEach(t => {
-    g.setEdge(t.from, t.to);
-  });
-
-  Dagre.layout(g);
-
-  workflow.nodes.forEach(node => {
-    const pos = g.node(node.id);
-    if (pos) {
-      node.position = { x: pos.x - 75, y: pos.y - 25 };
-    }
-  });
+  // Use our custom layout algorithm
+  const { applyLayout: doLayout } = require('./workflow-layout');
+  doLayout(workflow.nodes, workflow.transitions);
 }
 
 function generateId(): string {
