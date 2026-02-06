@@ -79,7 +79,7 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
         </div>
         <div className="flex items-center gap-2">
           {/* Save to Vault button */}
-          {currentModule && (
+          {currentModule ? (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -89,21 +89,25 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
               className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
                 saved
                   ? 'bg-emerald-500/20 text-emerald-400'
-                  : 'bg-white/10 text-zinc-300 hover:bg-emerald-500/20 hover:text-emerald-400'
+                  : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
               }`}
             >
               {saved ? (
                 <>
                   <CheckCircle className="h-3 w-3" />
-                  Saved
+                  In Vault
                 </>
               ) : (
                 <>
                   <Plus className="h-3 w-3" />
-                  Save
+                  Add to Vault
                 </>
               )}
             </button>
+          ) : (
+            <span className="rounded px-2 py-1 text-xs text-amber-400 bg-amber-500/10">
+              Create module first →
+            </span>
           )}
           <button
             onClick={(e) => {
