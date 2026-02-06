@@ -10,18 +10,46 @@
 import { useState } from 'react';
 import { Chat } from '@/components/Chat';
 import { WorkflowUploader } from '@/components/WorkflowUploader';
-import { MessageSquare, GitBranch } from 'lucide-react';
+import { VaultSidebar } from '@/components/VaultSidebar';
+import { VaultProvider, useVault } from '@/lib/vault-context';
+import { MessageSquare, GitBranch, PanelLeftClose, PanelLeft } from 'lucide-react';
+import type { Dictionary, Form, BusinessProcess } from '@/types/module';
 
 type Tab = 'chat' | 'workflow';
 
-export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>('workflow');
+function AppContent() {
+  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedArtifact, setSelectedArtifact] = useState<{
+    type: string;
+    data: Dictionary | Form | BusinessProcess;
+  } | null>(null);
+
+  const { currentModule } = useVault();
+
+  const handleSelectArtifact = (type: string, artifact: Dictionary | Form | BusinessProcess) => {
+    setSelectedArtifact({ type, data: artifact });
+    // If it's a workflow, switch to workflow tab
+    if (type === 'workflow') {
+      setActiveTab('workflow');
+    }
+  };
 
   return (
     <main className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+      <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="rounded p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="h-5 w-5" />
+            ) : (
+              <PanelLeft className="h-5 w-5" />
+            )}
+          </button>
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
             <svg
               className="h-5 w-5 text-white"
@@ -39,7 +67,9 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-lg font-semibold">Spinner</h1>
-            <p className="text-xs text-zinc-500">Module Builder</p>
+            <p className="text-xs text-zinc-500">
+              {currentModule ? currentModule.name : 'Module Builder'}
+            </p>
           </div>
         </div>
 
@@ -59,17 +89,48 @@ export default function Home() {
           />
         </nav>
 
-        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-          AI Native
-        </span>
+        <div className="flex items-center gap-2">
+          {currentModule && (
+            <span className="rounded bg-zinc-800 px-2 py-1 text-xs text-zinc-400">
+              {currentModule.dictionaries.length} dict · {currentModule.forms.length} forms · {currentModule.processes.length} flows
+            </span>
+          )}
+          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+            AI Native
+          </span>
+        </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === 'chat' && <Chat />}
-        {activeTab === 'workflow' && <WorkflowUploader />}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Vault Sidebar */}
+        {sidebarOpen && (
+          <VaultSidebar onSelectArtifact={handleSelectArtifact} />
+        )}
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden">
+          {activeTab === 'chat' && <Chat />}
+          {activeTab === 'workflow' && (
+            <WorkflowUploader
+              initialWorkflow={
+                selectedArtifact?.type === 'workflow'
+                  ? (selectedArtifact.data as BusinessProcess)
+                  : undefined
+              }
+            />
+          )}
+        </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <VaultProvider>
+      <AppContent />
+    </VaultProvider>
   );
 }
 

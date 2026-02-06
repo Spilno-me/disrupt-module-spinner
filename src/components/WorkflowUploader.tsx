@@ -7,21 +7,39 @@
  * Supports Windows Workflow Foundation state machine format.
  */
 
-import { useState, useCallback } from 'react';
-import { Upload, FileCode, X, Loader2, Download } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Upload, FileCode, X, Loader2, Download, Plus, CheckCircle } from 'lucide-react';
 import { parseXamlWorkflow } from '@/lib/xaml-parser';
 import { WorkflowPreview } from './WorkflowPreview';
+import { useVault } from '@/lib/vault-context';
 import type { BusinessProcess } from '@/types/module';
 
-export function WorkflowUploader() {
-  const [workflow, setWorkflow] = useState<BusinessProcess | null>(null);
+interface WorkflowUploaderProps {
+  initialWorkflow?: BusinessProcess;
+}
+
+export function WorkflowUploader({ initialWorkflow }: WorkflowUploaderProps) {
+  const [workflow, setWorkflow] = useState<BusinessProcess | null>(initialWorkflow || null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const { currentModule, addWorkflow } = useVault();
+
+  // Update workflow when initialWorkflow changes
+  useEffect(() => {
+    if (initialWorkflow) {
+      setWorkflow(initialWorkflow);
+      setFileName('From Vault');
+      setSaved(true);
+    }
+  }, [initialWorkflow]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     setIsLoading(true);
     setError(null);
+    setSaved(false);
 
     try {
       const content = await file.text();
@@ -57,6 +75,7 @@ export function WorkflowUploader() {
     setWorkflow(null);
     setFileName(null);
     setError(null);
+    setSaved(false);
   }, []);
 
   const handleExportJson = useCallback(() => {
@@ -70,6 +89,12 @@ export function WorkflowUploader() {
     a.click();
     URL.revokeObjectURL(url);
   }, [workflow]);
+
+  const handleSaveToVault = useCallback(() => {
+    if (!workflow || !currentModule) return;
+    addWorkflow(workflow);
+    setSaved(true);
+  }, [workflow, currentModule, addWorkflow]);
 
   if (workflow) {
     return (
@@ -86,6 +111,30 @@ export function WorkflowUploader() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Save to Vault button */}
+            {currentModule && (
+              <button
+                onClick={handleSaveToVault}
+                disabled={saved}
+                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  saved
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/20'
+                }`}
+              >
+                {saved ? (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    Saved
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Save to Vault
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={handleExportJson}
               className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition-colors hover:border-emerald-500 hover:text-emerald-400"
@@ -112,11 +161,11 @@ export function WorkflowUploader() {
           <div className="flex items-center gap-6 text-xs text-zinc-500">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Start: {workflow.nodes.find(n => n.type === 'start')?.name}
+              Start: {workflow.nodes.find(n => n.type === 'start')?.name || 'None'}
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-red-500" />
-              End: {workflow.nodes.filter(n => n.type === 'end').map(n => n.name).join(', ')}
+              End: {workflow.nodes.filter(n => n.type === 'end').map(n => n.name).join(', ') || 'None'}
             </span>
           </div>
         </div>

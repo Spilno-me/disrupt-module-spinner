@@ -10,10 +10,11 @@
  */
 
 import { useState } from 'react';
-import { List, FileText, GitBranch, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import { List, FileText, GitBranch, ChevronDown, ChevronUp, Copy, Check, Plus, CheckCircle } from 'lucide-react';
 import type { GeneratedArtifact, Dictionary, Form, BusinessProcess } from '@/types/module';
 import { getArtifactDisplayName, getArtifactColor } from '@/lib/artifacts';
 import { WorkflowPreview } from './WorkflowPreview';
+import { useVault } from '@/lib/vault-context';
 
 interface ArtifactPreviewProps {
   artifact: GeneratedArtifact;
@@ -23,6 +24,9 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
   const [expanded, setExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const { currentModule, addDictionary, addForm, addWorkflow } = useVault();
 
   const colorClass = getArtifactColor(artifact.type);
   const name = getArtifactDisplayName(artifact);
@@ -31,6 +35,24 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
     await navigator.clipboard.writeText(JSON.stringify(artifact, null, 2));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveToVault = () => {
+    if (!currentModule) return;
+
+    switch (artifact.type) {
+      case 'dictionary':
+        addDictionary(artifact.data as Dictionary);
+        break;
+      case 'form':
+        addForm(artifact.data as Form);
+        break;
+      case 'process':
+        addWorkflow(artifact.data as BusinessProcess);
+        break;
+    }
+
+    setSaved(true);
   };
 
   const Icon = {
@@ -56,6 +78,33 @@ export function ArtifactPreview({ artifact }: ArtifactPreviewProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Save to Vault button */}
+          {currentModule && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSaveToVault();
+              }}
+              disabled={saved}
+              className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
+                saved
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'bg-white/10 text-zinc-300 hover:bg-emerald-500/20 hover:text-emerald-400'
+              }`}
+            >
+              {saved ? (
+                <>
+                  <CheckCircle className="h-3 w-3" />
+                  Saved
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3" />
+                  Save
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
