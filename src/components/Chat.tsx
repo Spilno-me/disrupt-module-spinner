@@ -7,7 +7,7 @@
  * Clean, minimal, focused on the conversation.
  */
 
-import { useChat } from 'ai/react';
+import { useChat } from '@ai-sdk/react';
 import { useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 import { ArtifactPreview } from './ArtifactPreview';
