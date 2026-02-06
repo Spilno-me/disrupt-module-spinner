@@ -10,12 +10,14 @@
 import { useState } from 'react';
 import { Chat } from '@/components/Chat';
 import { WorkflowUploader } from '@/components/WorkflowUploader';
+import { DictionaryViewer } from '@/components/DictionaryViewer';
+import { FormViewer } from '@/components/FormViewer';
 import { VaultSidebar } from '@/components/VaultSidebar';
 import { VaultProvider, useVault } from '@/lib/vault-context';
-import { MessageSquare, GitBranch, PanelLeftClose, PanelLeft } from 'lucide-react';
+import { MessageSquare, GitBranch, PanelLeftClose, PanelLeft, List, FileText } from 'lucide-react';
 import type { Dictionary, Form, BusinessProcess } from '@/types/module';
 
-type Tab = 'chat' | 'workflow';
+type Tab = 'chat' | 'workflow' | 'dictionary' | 'form';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
@@ -29,10 +31,19 @@ function AppContent() {
 
   const handleSelectArtifact = (type: string, artifact: Dictionary | Form | BusinessProcess) => {
     setSelectedArtifact({ type, data: artifact });
-    // If it's a workflow, switch to workflow tab
+    // Switch to appropriate tab based on type
     if (type === 'workflow') {
       setActiveTab('workflow');
+    } else if (type === 'dictionary') {
+      setActiveTab('dictionary');
+    } else if (type === 'form') {
+      setActiveTab('form');
     }
+  };
+
+  const handleCloseArtifact = () => {
+    setSelectedArtifact(null);
+    setActiveTab('chat');
   };
 
   return (
@@ -77,7 +88,7 @@ function AppContent() {
         <nav className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1">
           <TabButton
             active={activeTab === 'chat'}
-            onClick={() => setActiveTab('chat')}
+            onClick={() => { setActiveTab('chat'); setSelectedArtifact(null); }}
             icon={<MessageSquare className="h-4 w-4" />}
             label="Chat"
           />
@@ -87,6 +98,22 @@ function AppContent() {
             icon={<GitBranch className="h-4 w-4" />}
             label="Workflow"
           />
+          {activeTab === 'dictionary' && selectedArtifact?.type === 'dictionary' && (
+            <TabButton
+              active={true}
+              onClick={() => {}}
+              icon={<List className="h-4 w-4" />}
+              label="Dictionary"
+            />
+          )}
+          {activeTab === 'form' && selectedArtifact?.type === 'form' && (
+            <TabButton
+              active={true}
+              onClick={() => {}}
+              icon={<FileText className="h-4 w-4" />}
+              label="Form"
+            />
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -118,6 +145,18 @@ function AppContent() {
                   ? (selectedArtifact.data as BusinessProcess)
                   : undefined
               }
+            />
+          )}
+          {activeTab === 'dictionary' && selectedArtifact?.type === 'dictionary' && (
+            <DictionaryViewer
+              dictionary={selectedArtifact.data as Dictionary}
+              onClose={handleCloseArtifact}
+            />
+          )}
+          {activeTab === 'form' && selectedArtifact?.type === 'form' && (
+            <FormViewer
+              form={selectedArtifact.data as Form}
+              onClose={handleCloseArtifact}
             />
           )}
         </div>
