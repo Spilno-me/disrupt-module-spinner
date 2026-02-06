@@ -3,6 +3,8 @@
  *
  * Parses Windows Workflow Foundation (WF) XAML state machine files
  * into our BusinessProcess format for visualization.
+ *
+ * Uses dagre for directed graph layout (client-side only).
  */
 
 import type { BusinessProcess, ProcessNode, ProcessTransition, ProcessNodeType } from '@/types/module';
@@ -22,7 +24,7 @@ interface ParsedTransition {
 /**
  * Parse XAML state machine to BusinessProcess format
  */
-export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
+export async function parseXamlWorkflow(xmlContent: string): Promise<BusinessProcess> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlContent, 'text/xml');
 
@@ -46,7 +48,7 @@ export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
   // Process all states
   let transitionId = 0;
 
-  function processState(state: ParsedState, level: number = 0) {
+  function processState(state: ParsedState) {
     if (processedNodes.has(state.refId)) return;
     processedNodes.add(state.refId);
 
@@ -55,7 +57,7 @@ export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
     const nameLower = state.name.toLowerCase();
     if (state.refId === initialRefId) {
       nodeType = 'start';
-    } else if (nameLower.includes('closed') || nameLower.includes('close')) {
+    } else if (nameLower === 'closed') {
       nodeType = 'end';
     } else if (nameLower.includes('check') || nameLower.includes('gateway')) {
       nodeType = 'gateway';
@@ -65,7 +67,7 @@ export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
       id: state.refId,
       type: nodeType,
       name: state.name,
-      position: { x: 0, y: 0 }, // Will be auto-layouted
+      position: { x: 0, y: 0 },
     });
 
     // Process transitions
@@ -81,7 +83,7 @@ export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
         // Process target state
         const targetState = stateMap.get(trans.toRefId);
         if (targetState) {
-          processState(targetState, level + 1);
+          processState(targetState);
         }
       }
     });
@@ -100,8 +102,8 @@ export function parseXamlWorkflow(xmlContent: string): BusinessProcess {
     }
   });
 
-  // Apply layout
-  applyHierarchicalLayout(nodes, transitions);
+  // Apply dagre layout (dynamic import for client-side only)
+  await applyDagreLayout(nodes, transitions);
 
   return {
     id: generateId(),
@@ -180,82 +182,63 @@ function cleanTransitionLabel(displayName: string): string {
   label = label.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
   // Truncate long conditions
-  if (label.length > 40) {
+  if (label.length > 25) {
     // Extract meaningful part
     const match = label.match(/Submit|Approve|Decline|Close|Reopen|Request|Confirm|Investigation/i);
     if (match) {
       return match[0];
     }
-    return label.substring(0, 35) + '...';
+    return label.substring(0, 20) + '...';
   }
 
-  return label || 'transition';
+  return label || '';
 }
 
 /**
- * Apply hierarchical layout to nodes
+ * Apply dagre layout for proper directed graph positioning
  */
-function applyHierarchicalLayout(nodes: ProcessNode[], transitions: ProcessTransition[]) {
+async function applyDagreLayout(nodes: ProcessNode[], transitions: ProcessTransition[]) {
   if (nodes.length === 0) return;
 
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-  const levels: Map<string, number> = new Map();
-  const positions: Map<string, number> = new Map();
+  // Dynamic import to avoid SSR issues
+  const Dagre = (await import('@dagrejs/dagre')).default;
 
-  // Find start nodes (no incoming edges)
-  const hasIncoming = new Set(transitions.map(t => t.to));
-  const startNodeIds = nodes.filter(n => !hasIncoming.has(n.id) || n.type === 'start').map(n => n.id);
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
-  // BFS to assign levels
-  const queue = startNodeIds.map(id => ({ id, level: 0 }));
-
-  while (queue.length > 0) {
-    const { id, level } = queue.shift()!;
-
-    if (levels.has(id) && levels.get(id)! <= level) continue;
-    levels.set(id, level);
-
-    // Get outgoing transitions
-    const outgoing = transitions.filter(t => t.from === id);
-    for (const t of outgoing) {
-      if (!levels.has(t.to) || levels.get(t.to)! > level + 1) {
-        queue.push({ id: t.to, level: level + 1 });
-      }
-    }
-  }
-
-  // Handle nodes not reached (cycles, isolated)
-  let maxLevel = Math.max(...Array.from(levels.values()), 0);
-  nodes.forEach(n => {
-    if (!levels.has(n.id)) {
-      levels.set(n.id, ++maxLevel);
-    }
+  // Configure layout: top-to-bottom, with good spacing
+  g.setGraph({
+    rankdir: 'TB',      // Top to bottom
+    nodesep: 80,        // Horizontal spacing between nodes
+    ranksep: 100,       // Vertical spacing between ranks
+    marginx: 50,
+    marginy: 50,
   });
 
-  // Group nodes by level
-  const levelGroups: Map<number, string[]> = new Map();
-  levels.forEach((level, id) => {
-    if (!levelGroups.has(level)) {
-      levelGroups.set(level, []);
-    }
-    levelGroups.get(level)!.push(id);
-  });
-
-  // Position nodes
-  const xGap = 220;
-  const yGap = 100;
-
-  levelGroups.forEach((nodeIds, level) => {
-    nodeIds.forEach((id, index) => {
-      const node = nodeMap.get(id);
-      if (node) {
-        const totalHeight = (nodeIds.length - 1) * yGap;
-        node.position = {
-          x: level * xGap + 50,
-          y: index * yGap - totalHeight / 2 + 200,
-        };
-      }
+  // Add nodes
+  nodes.forEach(node => {
+    g.setNode(node.id, {
+      width: 150,
+      height: 50,
     });
+  });
+
+  // Add edges
+  transitions.forEach(t => {
+    g.setEdge(t.from, t.to);
+  });
+
+  // Run layout
+  Dagre.layout(g);
+
+  // Apply positions to nodes
+  nodes.forEach(node => {
+    const nodeWithPosition = g.node(node.id);
+    if (nodeWithPosition) {
+      node.position = {
+        x: nodeWithPosition.x - 75,  // Center the node (width/2)
+        y: nodeWithPosition.y - 25,  // Center the node (height/2)
+      };
+    }
   });
 }
 
