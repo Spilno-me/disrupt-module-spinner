@@ -18,13 +18,13 @@ interface LayoutOptions {
 }
 
 const DEFAULT_OPTIONS: LayoutOptions = {
-  direction: 'TB',
-  nodeWidth: 150,
-  nodeHeight: 50,
-  horizontalGap: 80,
-  verticalGap: 100,
-  marginX: 50,
-  marginY: 50,
+  direction: 'LR',  // Horizontal layout like BPMN
+  nodeWidth: 180,
+  nodeHeight: 60,
+  horizontalGap: 120,  // More space between columns
+  verticalGap: 80,     // Space between parallel paths
+  marginX: 80,
+  marginY: 100,
 };
 
 /**
