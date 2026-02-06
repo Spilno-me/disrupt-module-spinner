@@ -7,18 +7,21 @@
  * Clean, minimal, focused on the conversation.
  */
 
-import { useChat } from '@ai-sdk/react';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Loader2, Sparkles } from 'lucide-react';
 import { ArtifactPreview } from './ArtifactPreview';
 import { extractArtifacts } from '@/lib/artifacts';
 
-export function Chat() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } =
-    useChat({
-      api: '/api/chat',
-    });
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
 
+export function Chat() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,11 +35,81 @@ export function Chat() {
     inputRef.current?.focus();
   }, []);
 
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: inputValue,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to get response');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantContent = '';
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '',
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        assistantContent += chunk;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessage.id
+              ? { ...m, content: assistantContent }
+              : m
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Sorry, I encountered an error. Please try again.',
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputValue, isLoading, messages]);
+
   // Handle Enter to submit (Shift+Enter for newline)
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as unknown as React.FormEvent);
+      handleSubmit(e);
     }
   };
 
@@ -45,11 +118,11 @@ export function Chat() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         {messages.length === 0 ? (
-          <EmptyState />
+          <EmptyState onSuggestionClick={(s) => setInputValue(s)} />
         ) : (
           <div className="mx-auto max-w-3xl space-y-6">
             {messages.map((message) => (
-              <Message key={message.id} message={message} />
+              <MessageBubble key={message.id} message={message} />
             ))}
             {isLoading && <ThinkingIndicator />}
             <div ref={messagesEndRef} />
@@ -63,8 +136,8 @@ export function Chat() {
           <div className="relative">
             <textarea
               ref={inputRef}
-              value={input}
-              onChange={handleInputChange}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Describe what you need... (e.g., 'Create incident severity levels')"
               rows={1}
@@ -73,7 +146,7 @@ export function Chat() {
             />
             <button
               type="submit"
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !inputValue.trim()}
               className="absolute bottom-2 right-2 rounded-lg bg-emerald-600 p-2 text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600"
             >
               {isLoading ? (
@@ -93,7 +166,17 @@ export function Chat() {
 // Sub-components
 // ─────────────────────────────────────────────────────────────
 
-function EmptyState() {
+interface EmptyStateProps {
+  onSuggestionClick: (suggestion: string) => void;
+}
+
+function EmptyState({ onSuggestionClick }: EmptyStateProps) {
+  const suggestions = [
+    'Create incident severity levels',
+    'Build an inspection form',
+    'Design approval workflow',
+  ];
+
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
@@ -108,13 +191,11 @@ function EmptyState() {
           dictionaries, forms, and business processes for your HSE system.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
-          {[
-            'Create incident severity levels',
-            'Build an inspection form',
-            'Design approval workflow',
-          ].map((suggestion) => (
+          {suggestions.map((suggestion) => (
             <button
               key={suggestion}
+              type="button"
+              onClick={() => onSuggestionClick(suggestion)}
               className="rounded-full border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-emerald-500 hover:text-emerald-400"
             >
               {suggestion}
@@ -126,11 +207,11 @@ function EmptyState() {
   );
 }
 
-interface MessageProps {
-  message: { id: string; role: string; content: string };
+interface MessageBubbleProps {
+  message: Message;
 }
 
-function Message({ message }: MessageProps) {
+function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const artifacts = extractArtifacts(message.content);
 
