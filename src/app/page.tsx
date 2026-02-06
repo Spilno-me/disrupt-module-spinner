@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Spinner - Module Builder
  *
@@ -5,9 +7,16 @@
  * Dictionaries, Forms, and Business Processes — generated through dialogue.
  */
 
+import { useState } from 'react';
 import { Chat } from '@/components/Chat';
+import { WorkflowUploader } from '@/components/WorkflowUploader';
+import { MessageSquare, GitBranch } from 'lucide-react';
+
+type Tab = 'chat' | 'workflow';
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<Tab>('workflow');
+
   return (
     <main className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       {/* Header */}
@@ -34,17 +43,57 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="flex items-center gap-4">
-          <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
-            AI Native
-          </span>
+        {/* Tab Navigation */}
+        <nav className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900 p-1">
+          <TabButton
+            active={activeTab === 'chat'}
+            onClick={() => setActiveTab('chat')}
+            icon={<MessageSquare className="h-4 w-4" />}
+            label="Chat"
+          />
+          <TabButton
+            active={activeTab === 'workflow'}
+            onClick={() => setActiveTab('workflow')}
+            icon={<GitBranch className="h-4 w-4" />}
+            label="Workflow"
+          />
         </nav>
+
+        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400">
+          AI Native
+        </span>
       </header>
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <Chat />
+        {activeTab === 'chat' && <Chat />}
+        {activeTab === 'workflow' && <WorkflowUploader />}
       </div>
     </main>
+  );
+}
+
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}
+
+function TabButton({ active, onClick, icon, label }: TabButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors
+        ${active
+          ? 'bg-emerald-500/20 text-emerald-400'
+          : 'text-zinc-400 hover:text-zinc-200'
+        }
+      `}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
